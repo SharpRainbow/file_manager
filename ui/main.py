@@ -45,8 +45,11 @@ class Ui_MainWindow(object):
         self.actionHome.setObjectName("actionHome")
         self.actionBack = QtWidgets.QAction(MainWindow)
         self.actionBack.setObjectName("actionBack")
+        self.actionShowHidden = QtWidgets.QAction(MainWindow)
+        self.actionShowHidden.setObjectName("actionShowHidden")
         self.menuHome.addAction(self.actionHome)
         self.menuHome.addAction(self.actionBack)
+        self.menuHome.addAction(self.actionShowHidden)
         self.menubar.addAction(self.menuHome.menuAction())
 
         self.retranslateUi(MainWindow)
@@ -58,3 +61,4 @@ class Ui_MainWindow(object):
         self.menuHome.setTitle(_translate("MainWindow", "Menu"))
         self.actionHome.setText(_translate("MainWindow", "Home"))
         self.actionBack.setText(_translate("MainWindow", "Back"))
+        self.actionShowHidden.setText(_translate("MainWindow", "Show hidden files"))

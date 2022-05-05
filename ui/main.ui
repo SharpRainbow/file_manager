@@ -76,6 +76,7 @@
     </property>
     <addaction name="actionHome"/>
     <addaction name="actionBack"/>
+    <addaction name="actionShowHidden"/>
    </widget>
    <addaction name="menuHome"/>
   </widget>
@@ -88,6 +89,11 @@
   <action name="actionBack">
    <property name="text">
     <string>Back</string>
+   </property>
+  </action>
+  <action name="actionShowHidden">
+   <property name="text">
+    <string>Show hidden files</string>
    </property>
   </action>
  </widget>
