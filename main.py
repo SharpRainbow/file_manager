@@ -142,14 +142,8 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 err.setText("Wrong name!")
                 err.show()
-            elif os.path.exists(path + '/' + i):
-                err.setText("Already exists!")
-                err.show()
-            elif not os.path.isdir(path):
-                err.setText("Not a directory!")
-                err.show()
             else:
-                self.model.mkdir(index, i)
+                Path(path + '/' + i).mkdir(exist_ok=True)
 
     def new_file(self):
         index = self.treeView.rootIndex()
@@ -162,16 +156,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 err.setText("Wrong name!")
                 err.show()
-            elif os.path.exists(path + '/' + i):
-                err.setText("Already exists!")
-                err.show()
-            elif not os.path.isdir(path):
-                err.setText("Not a directory!")
+            elif path == "C:/":
+                err.setText("Can't create file here!")
                 err.show()
             else:
-                filename = path + '/' + i
-                with open(filename, 'w'):
-                    pass
+                Path(path + '/' + i).touch(exist_ok=True)
 
     def delete_selected(self):
         index = self.treeView.selectedIndexes()
