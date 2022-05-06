@@ -3,9 +3,10 @@ import os
 import shutil
 import re
 import threading
-import time
+
 import datetime
 from pathlib import Path
+
 from functools import partial
 
 from PyQt5 import QtCore, QtWidgets, QtGui
@@ -70,16 +71,17 @@ class AttributeWindow(QWidget):
 
 
 class Worker(QThread):
-    finished = pyqtSignal(int)
+    finished = pyqtSignal(float)
 
     def __init__(self, file):
         super(Worker, self).__init__()
         self.file = file
 
     def run(self) -> None:
-        size = None
+        size = 0
         if self.file.is_dir() or self.file.is_file():
             size = round(get_size(self.file), 3)
+            print(size)
         self.finished.emit(size)
 
 
@@ -91,6 +93,7 @@ def get_size(filepath):
             fp = os.path.join(dirpath, f)
             if not os.path.islink(fp):
                 total_size += os.path.getsize(fp)
+    print(total_size)
     return total_size
 
 
@@ -120,8 +123,8 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.info()
 
     def start_search(self):
-        thread = QThread(self.file_search())
-        thread.start()
+        self.thread = QThread(self.file_search())
+        self.thread.start()
 
     def file_search(self):
         index = self.treeView.currentIndex()
@@ -132,9 +135,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                 for d in dirs:
                     if s == d:
                         print(path)
+                        self.search_goto(path)
                         return
                 for f in files:
                     if s == f:
+                        self.search_goto(path)
                         print(path)
                         return
 
@@ -336,9 +341,10 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
     def att(self):
         index = self.treeView.selectedIndexes()
         file = Path(self.model.filePath(index[0]))
-        worker = Worker(file)
-        worker.finished.connect(self.report)
-        worker.start()
+        self.worker = Worker(file)
+        self.worker.finished.connect(self.report)
+        print ('Start!')
+        self.worker.start()
 
     def report(self, n):
         index = self.treeView.selectedIndexes()
