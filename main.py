@@ -6,12 +6,13 @@ import threading
 import time
 import datetime
 from pathlib import Path
-from threading import Thread
+from functools import partial
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QTreeView, QWidget, QVBoxLayout, \
     QLabel, QLineEdit, QHBoxLayout
-from PyQt5.QtCore import QDir, Qt, QThread
+from PyQt5.QtCore import QDir, Qt
+from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 
 from ui import main
 
@@ -68,6 +69,31 @@ class AttributeWindow(QWidget):
         self.layout.addLayout(third_row)
 
 
+class Worker(QThread):
+    finished = pyqtSignal(int)
+
+    def __init__(self, file):
+        super(Worker, self).__init__()
+        self.file = file
+
+    def run(self) -> None:
+        size = None
+        if self.file.is_dir() or self.file.is_file():
+            size = round(get_size(self.file), 3)
+        self.finished.emit(size)
+
+
+def get_size(filepath):
+    total_size = 0
+    os.chdir(filepath)
+    for dirpath, dirnames, filenames in os.walk(filepath):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+    return total_size
+
+
 class MyWidget(QMainWindow, main.Ui_MainWindow):
     keyPressed = QtCore.pyqtSignal(QtCore.QEvent)
 
@@ -94,18 +120,23 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.info()
 
     def start_search(self):
+        thread = QThread(self.file_search())
+        thread.start()
+
+    def file_search(self):
         index = self.treeView.currentIndex()
         filepath = self.model.filePath(index)
         s, search = QInputDialog.getText(self, "Search", "Input", text="")
         if search:
-            thread = threading.Thread(self.file_search(filepath, s))
-            thread.start()
-
-    def file_search(self, filepath, s):
-        for dirpath, dirnames, filenames in os.walk(filepath):
-            for f in filenames:
-                if s == f:
-                    self.search_goto(dirpath)
+            for path, dirs, files in os.walk(filepath):
+                for d in dirs:
+                    if s == d:
+                        print(path)
+                        return
+                for f in files:
+                    if s == f:
+                        print(path)
+                        return
 
     def info(self):
         self.model = QtWidgets.QFileSystemModel()
@@ -153,12 +184,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             copy = menu.addAction("Copy")
             attributes = menu.addAction("Attributes")
             arc = menu.addAction("Archive")
-            if file.suffix == '.rar' and '.zip':
+            if file.suffix == '.zip':
                 unpack = menu.addAction("Unpack")
                 unpack.triggered.connect(self.unpack)
             arc.triggered.connect(self.archive)
             copy.triggered.connect(self.copy)
-            attributes.triggered.connect(self.show_atts)
+            attributes.triggered.connect(self.att)
             delete.triggered.connect(self.delete_selected)
             _open.triggered.connect(self.open_file)
             change.triggered.connect(self.change_name)
@@ -213,15 +244,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.model = QtWidgets.QFileSystemModel()
         self.model.setRootPath((QtCore.QDir.rootPath()))
         self.treeView.setModel(self.model)
-
-    def get_size(self, filepath):
-        total_size = 0
-        for dirpath, dirnames, filenames in os.walk(filepath):
-            for f in filenames:
-                fp = os.path.join(dirpath, f)
-                if not os.path.islink(fp):
-                    total_size += os.path.getsize(fp)
-        return total_size
 
     def change_name(self):
         index = self.treeView.selectedIndexes()
@@ -322,12 +344,20 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                            + Path(i).suffix
                 shutil.copy2(i, path)
 
-    def show_atts(self):
+    def att(self):
         index = self.treeView.selectedIndexes()
         file = Path(self.model.filePath(index[0]))
-        size = round(self.get_size(file), 3)
-        self.a = AttributeWindow(file.name, file, size)
+        worker = Worker(file)
+        worker.finished.connect(self.report)
+        worker.start()
+
+    def report(self, n):
+        index = self.treeView.selectedIndexes()
+        file = Path(self.model.filePath(index[0]))
+        self.a = AttributeWindow(file.name, file, n)
         self.a.show()
+        print(file.name)
+        print(n)
 
     def archive(self):
         index = self.treeView.selectedIndexes()
