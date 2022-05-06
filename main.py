@@ -2,18 +2,16 @@ import sys
 import os
 import shutil
 import re
-import threading
 
 import datetime
+import time
 from pathlib import Path
-
-from functools import partial
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QTreeView, QWidget, QVBoxLayout, \
     QLabel, QLineEdit, QHBoxLayout
 from PyQt5.QtCore import QDir, Qt
-from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QThread, pyqtSignal
 
 from ui import main
 
@@ -81,8 +79,30 @@ class Worker(QThread):
         size = 0
         if self.file.is_dir() or self.file.is_file():
             size = round(get_size(self.file), 3)
-            print(size)
         self.finished.emit(size)
+
+
+class Searcher(QThread):
+    finished = pyqtSignal(list)
+
+    files_list = list()
+
+    def __init__(self, name, root):
+        super(Searcher, self).__init__()
+        self.name = name
+        self.root = root
+
+    def run(self) -> None:
+        for path, dirs, files in os.walk(self.root):
+            for d in dirs:
+                if self.name == d:
+                    self.files_list.append(path)
+            for f in files:
+                if self.name == f:
+                    self.files_list.append(path)
+        if len(self.files_list) == 0:
+            self.files_list.append("Empty")
+        self.finished.emit(self.files_list)
 
 
 def get_size(filepath):
@@ -93,7 +113,6 @@ def get_size(filepath):
             fp = os.path.join(dirpath, f)
             if not os.path.islink(fp):
                 total_size += os.path.getsize(fp)
-    print(total_size)
     return total_size
 
 
@@ -115,33 +134,24 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.actionBack.triggered.connect(self.go_back)
         self.actionHome.triggered.connect(self.home_dir)
         self.actionShowHidden.triggered.connect(self.show_hid)
-        self.actionSearch.triggered.connect(self.start_search)
+        self.actionSearch.triggered.connect(self.file_search)
         self.lineEdit.returnPressed.connect(self.goto)
         self.keyPressed.connect(self.on_key)
         self.treeView.setAcceptDrops(True)
         self.treeView.setDropIndicatorShown(True)
         self.info()
 
-    def start_search(self):
-        self.thread = QThread(self.file_search())
-        self.thread.start()
+    def show_res(self, files):
+        print(files)
 
     def file_search(self):
-        index = self.treeView.currentIndex()
+        index = self.treeView.rootIndex()
         filepath = self.model.filePath(index)
         s, search = QInputDialog.getText(self, "Search", "Input", text="")
         if search:
-            for path, dirs, files in os.walk(filepath):
-                for d in dirs:
-                    if s == d:
-                        print(path)
-                        self.search_goto(path)
-                        return
-                for f in files:
-                    if s == f:
-                        self.search_goto(path)
-                        print(path)
-                        return
+            self.worker1 = Searcher(s, filepath)
+            self.worker1.finished.connect(self.show_res)
+            self.worker1.start()
 
     def info(self):
         self.model = QtWidgets.QFileSystemModel()
@@ -343,7 +353,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         file = Path(self.model.filePath(index[0]))
         self.worker = Worker(file)
         self.worker.finished.connect(self.report)
-        print ('Start!')
         self.worker.start()
 
     def report(self, n):
@@ -351,8 +360,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         file = Path(self.model.filePath(index[0]))
         self.a = AttributeWindow(file.name, file, n)
         self.a.show()
-        print(file.name)
-        print(n)
 
     def archive(self):
         index = self.treeView.selectedIndexes()
