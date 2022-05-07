@@ -17,10 +17,10 @@ from ui import main
 
 
 class AttributeWindow(QWidget):
-    def __init__(self, filename, filepath, filesize):
+    def __init__(self, file, filesize):
         super().__init__()
-        self.filename = filename
-        self.filepath = filepath
+        self.filename = file.name
+        self.filepath = file
         self.filesize = filesize
         self.init_vars()
         self.init_ui()
@@ -34,13 +34,11 @@ class AttributeWindow(QWidget):
         self.layout = QVBoxLayout(self)
         self.setWindowTitle(self.filename)
         filesize_label = QLabel("Size:")
-        filesize_real = str(self.filesize / 1000) + " KB"
-        if self.filesize > 1000000:
-            filesize_number = round((self.filesize / 1000000), 1)
-            filesize_real = str(filesize_number) + " MB"
-        if self.filesize < 1000:
-            filesize_number = round((self.filesize / 1000), 1)
-            filesize_real = str(filesize_number) + " B"
+        filesize_real = format(self.filesize / 1024, '.2f') + " KB"
+        if self.filesize > 1048576:
+            filesize_real = format(self.filesize / 1048576, '.2f') + " MB"
+        if self.filesize < 1024:
+            filesize_real = str(self.filesize) + " B"
         filesize_value = QLineEdit(filesize_real)
         filesize_value.setEnabled(False)
         first_row = QHBoxLayout()
@@ -68,16 +66,18 @@ class AttributeWindow(QWidget):
         self.layout.addLayout(third_row)
 
 
-class Worker(QThread):
+class SizeWorker(QThread):
     finished = pyqtSignal(float)
 
     def __init__(self, file):
-        super(Worker, self).__init__()
+        super(SizeWorker, self).__init__()
         self.file = file
 
     def run(self) -> None:
         size = 0
-        if self.file.is_dir() or self.file.is_file():
+        if self.file.is_file():
+            size = self.file.stat().st_size
+        elif self.file.is_dir():
             size = round(get_size(self.file), 3)
         self.finished.emit(size)
 
@@ -107,12 +107,14 @@ class Searcher(QThread):
 
 def get_size(filepath):
     total_size = 0
-    os.chdir(filepath)
     for dirpath, dirnames, filenames in os.walk(filepath):
         for f in filenames:
             fp = os.path.join(dirpath, f)
             if not os.path.islink(fp):
-                total_size += os.path.getsize(fp)
+                try:
+                    total_size += os.path.getsize(fp)
+                except FileNotFoundError:
+                    continue
     return total_size
 
 
@@ -149,9 +151,9 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         filepath = self.model.filePath(index)
         s, search = QInputDialog.getText(self, "Search", "Input", text="")
         if search:
-            self.worker1 = Searcher(s, filepath)
-            self.worker1.finished.connect(self.show_res)
-            self.worker1.start()
+            self.search_worker = Searcher(s, filepath)
+            self.search_worker.finished.connect(self.show_res)
+            self.search_worker.start()
 
     def info(self):
         self.model = QtWidgets.QFileSystemModel()
@@ -177,7 +179,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             if event.key() == Qt.Key_D:
                 self.delete_selected()
             if event.key() == Qt.Key_S:
-                self.search()
+                self.file_search()
             if event.key() == Qt.Key_Left:
                 self.go_back()
 
@@ -204,7 +206,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                 unpack.triggered.connect(self.unpack)
             arc.triggered.connect(self.archive)
             copy.triggered.connect(self.copy)
-            attributes.triggered.connect(self.att)
+            attributes.triggered.connect(self.show_atts)
             delete.triggered.connect(self.delete_selected)
             _open.triggered.connect(self.open_file)
             change.triggered.connect(self.change_name)
@@ -348,18 +350,22 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                            + Path(i).suffix
                 shutil.copy2(i, path)
 
-    def att(self):
+    def show_atts(self):
         index = self.treeView.selectedIndexes()
-        file = Path(self.model.filePath(index[0]))
-        self.worker = Worker(file)
-        self.worker.finished.connect(self.report)
-        self.worker.start()
+        self.file = Path(self.model.filePath(index[0]))
+        self.size_worker = SizeWorker(self.file)
+        self.size_worker.finished.connect(self.report)
+        self.size_worker.start()
+        self.atts_win = QMessageBox(self)
+        self.atts_win.setIcon(QMessageBox.Information)
+        self.atts_win.setWindowTitle("Please wait")
+        self.atts_win.setText("Work in progress")
+        self.atts_win.show()
 
     def report(self, n):
-        index = self.treeView.selectedIndexes()
-        file = Path(self.model.filePath(index[0]))
-        self.a = AttributeWindow(file.name, file, n)
-        self.a.show()
+        self.atts_win.close()
+        self.atts_win = AttributeWindow(self.file, n)
+        self.atts_win.show()
 
     def archive(self):
         index = self.treeView.selectedIndexes()
