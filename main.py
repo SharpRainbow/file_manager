@@ -16,6 +16,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+        self.hidden = False
         self.copy_this = set()
         self.comboBox.activated.connect(self.path_changer)
         self.treeView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
@@ -167,17 +168,21 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         index = self.treeView.rootIndex()
         try:
             for i in self.copy_this:
+                file_to_copy = Path(i)
+                if not file_to_copy.exists():
+                    self.show_msg("Error", "File not exists!")
+                    continue
                 path = self.model.filePath(index)
                 if os.path.isdir(i):
-                    path = path + f'/{Path(i).name}'
+                    path = path + f'/{file_to_copy.name}'
                     if os.path.exists(path):
                         path += " - copy at " + str(round(time.time() * 1000))
                     shutil.copytree(i, path)
                 else:
-                    if os.path.exists(path + "/" + Path(i).name):
+                    if os.path.exists(path + "/" + file_to_copy.name):
                         path = path \
-                            + '/' + Path(i).stem + " - copy" \
-                            + Path(i).suffix
+                            + '/' + file_to_copy.stem + " - copy" \
+                            + file_to_copy.suffix
                     shutil.copy2(i, path)
         except PermissionError:
             self.show_msg("Warning", "Run as admin to do that")
