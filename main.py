@@ -176,12 +176,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                 self.paste()
             if event.key() == Qt.Key_R:
                 self.change_name()
-            if event.key() == Qt.Key_D:
-                self.delete_selected()
             if event.key() == Qt.Key_S:
                 self.file_search()
             if event.key() == Qt.Key_Left:
                 self.go_back()
+        if event.key() == Qt.Key_Delete:
+            self.delete_selected()
 
     def cont_menu(self):
         menu = QtWidgets.QMenu()
@@ -359,7 +359,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.atts_win = QMessageBox(self)
         self.atts_win.setIcon(QMessageBox.Information)
         self.atts_win.setWindowTitle("Please wait")
-        self.atts_win.setText("Work in progress")
+        self.atts_win.setText("Calculating size...")
         self.atts_win.show()
 
     def report(self, n):
