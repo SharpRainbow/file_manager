@@ -32,6 +32,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.treeView.doubleClicked.connect(self.open_file)
         self.treeView.viewport().installEventFilter(self)
         self.treeView.setModel(self.model)
+        self.treeView.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.treeView.setDragDropMode(QTreeView.InternalMove)
         self.treeView.setSelectionMode(QTreeView.ExtendedSelection)
         self.treeView.sortByColumn(0, QtCore.Qt.SortOrder(0))
@@ -129,15 +130,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         if len(index) > 4 or len(index) <= 0:
             self.show_msg("Error", "Choose one item")
             return
-        file = Path(self.model.filePath(index[0]))
-        i, edited = QInputDialog.getText(self, "Change name", "Input", text=file.name)
-        if edited:
-            if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
-                self.show_msg("Error", "Invalid name!")
-            elif os.path.exists(str(file.parent) + '/' + i):
-                self.show_msg("Error", "Already exists!")
-            else:
-                file.rename(self.lineEdit.text() + "/" + i)
+        self.treeView.edit(index[0])
 
     def new_dir(self):
         index = self.treeView.rootIndex()
