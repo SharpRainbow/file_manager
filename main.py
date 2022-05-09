@@ -18,26 +18,28 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.setupUi(self)
         self.hidden = False
         self.copy_this = set()
-        self.comboBox.activated.connect(self.path_changer)
+        self.setAcceptDrops(True)
+        self.actionBack.triggered.connect(self.go_back)
+        self.actionHome.triggered.connect(self.home_dir)
+        self.actionShowHidden.triggered.connect(self.show_hid)
+
+        self.model = QtWidgets.QFileSystemModel()
+        self.model.setRootPath((QtCore.QDir.rootPath()))
+        self.model.setReadOnly(False)
+
         self.treeView.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.treeView.customContextMenuRequested.connect(self.cont_menu)
         self.treeView.doubleClicked.connect(self.open_file)
         self.treeView.viewport().installEventFilter(self)
-        self.treeView.setSelectionMode(QTreeView.ExtendedSelection)
-        self.actionBack.triggered.connect(self.go_back)
-        self.actionHome.triggered.connect(self.home_dir)
-        self.actionShowHidden.triggered.connect(self.show_hid)
-        self.lineEdit.returnPressed.connect(self.goto)
-        self.treeView.setDragDropMode(True)
-        self.info()
-
-    def info(self):
-        self.model = QtWidgets.QFileSystemModel()
-        self.model.setRootPath((QtCore.QDir.rootPath()))
         self.treeView.setModel(self.model)
+        self.treeView.setDragDropMode(QTreeView.InternalMove)
+        self.treeView.setSelectionMode(QTreeView.ExtendedSelection)
         self.treeView.sortByColumn(0, QtCore.Qt.SortOrder(0))
         self.treeView.setColumnWidth(0, 200)
         self.treeView.setSortingEnabled(True)
+
+        self.lineEdit.returnPressed.connect(self.goto)
+        self.comboBox.activated.connect(self.path_changer)
 
     def cont_menu(self):
         menu = QtWidgets.QMenu()
@@ -65,6 +67,17 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         cursor = QtGui.QCursor()
         menu.exec_(cursor.pos())
 
+    def dragEnterEvent(self, event):
+        mime = event.mimeData()
+        if mime.hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            self.copy_this.add(url.toLocalFile())
+            self.paste()
+        return super().dropEvent(event)
+
     def open_file(self):
         index = self.treeView.currentIndex()
         file_path = self.model.filePath(index)
@@ -74,15 +87,19 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         if os.path.isdir(file_path):
             self.treeView.setRootIndex(self.model.index(file_path))
             self.lineEdit.setText(file_path)
-            path_list = [x for x in file_path.split("/") if x != ""]
-            self.comboBox.clear()
-            self.comboBox.addItems(path_list)
-            self.comboBox.setCurrentText(path_list[len(path_list) - 1])
+            self.set_path(file_path)
+
+    def set_path(self, path):
+        path_list = [x for x in path.split("/") if x != ""]
+        self.comboBox.clear()
+        self.comboBox.addItems(path_list)
+        self.comboBox.setCurrentText(path_list[len(path_list) - 1])
 
     def goto(self):
         path = self.lineEdit.text()
         if os.path.exists(path):
             self.treeView.setRootIndex(self.model.index(path))
+            self.set_path(path)
         else:
             self.show_msg("Error", "Wrong path!")
 
@@ -163,6 +180,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         indexes = self.treeView.selectedIndexes()
         for i in indexes:
             self.copy_this.add(self.model.filePath(i))
+        print(self.copy_this)
 
     def paste(self):
         index = self.treeView.rootIndex()
