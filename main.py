@@ -9,11 +9,39 @@ from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QTreeView, QWidget, QVBoxLayout, \
-    QLabel, QLineEdit, QHBoxLayout
+    QLabel, QLineEdit, QHBoxLayout, QListWidget
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtCore import QThread, pyqtSignal
 
 from ui import main
+
+
+class SearchResults(QWidget):
+    clicked = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+
+        self.list_view = QListWidget()
+
+        self.list_view.itemClicked.connect(self.selected)
+        self.setMinimumWidth(1000)
+        vbox = QVBoxLayout()
+        vbox.addWidget(self.list_view)
+        self.setLayout(vbox)
+
+    def add(self, item):
+        self.list_view.addItem(item)
+
+    def selected(self, item):
+        self.clicked.emit(item.text())
+
+    def finished(self):
+        info = QMessageBox(self)
+        info.setIcon(QMessageBox.Information)
+        info.setWindowTitle("Error")
+        info.setText("Search ended")
+        info.show()
 
 
 class AttributeWindow(QWidget):
@@ -83,9 +111,8 @@ class SizeWorker(QThread):
 
 
 class Searcher(QThread):
-    finished = pyqtSignal(list)
-
-    files_list = list()
+    found = pyqtSignal(str)
+    finished = pyqtSignal()
 
     def __init__(self, name, root):
         super(Searcher, self).__init__()
@@ -96,13 +123,13 @@ class Searcher(QThread):
         for path, dirs, files in os.walk(self.root):
             for d in dirs:
                 if self.name == d:
-                    self.files_list.append(path)
+                    self.found.emit(path)
+                    print(path)
             for f in files:
-                if self.name == f:
-                    self.files_list.append(path)
-        if len(self.files_list) == 0:
-            self.files_list.append("Empty")
-        self.finished.emit(self.files_list)
+                if str(f).startswith(self.name):
+                    self.found.emit(path)
+                    print(path)
+        self.finished.emit()
 
 
 def get_size(filepath):
@@ -143,8 +170,15 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.treeView.setDropIndicatorShown(True)
         self.info()
 
-    def show_res(self, files):
-        print(files)
+    def finish(self):
+        self.win.finished()
+
+    def show_res(self, file):
+        self.win.add(file)
+
+    def click(self, file):
+        self.treeView.setRootIndex(self.model.index(file))
+        self.win.close()
 
     def file_search(self):
         index = self.treeView.rootIndex()
@@ -152,8 +186,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         s, search = QInputDialog.getText(self, "Search", "Input", text="")
         if search:
             self.search_worker = Searcher(s, filepath)
-            self.search_worker.finished.connect(self.show_res)
+            self.search_worker.found.connect(self.show_res)
+            self.search_worker.finished.connect(self.finish)
             self.search_worker.start()
+            self.win = SearchResults()
+            self.win.show()
+            self.win.clicked.connect(self.click)
 
     def info(self):
         self.model = QtWidgets.QFileSystemModel()
