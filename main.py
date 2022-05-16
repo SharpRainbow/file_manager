@@ -2,9 +2,9 @@ import sys
 import os
 import shutil
 import re
-
 import datetime
 import time
+
 from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
@@ -162,7 +162,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.keyPressed.connect(self.on_key)
         self.treeView.setAcceptDrops(True)
         self.treeView.setDropIndicatorShown(True)
-        self.info()
 
         self.model = QtWidgets.QFileSystemModel()
         self.model.setRootPath((QtCore.QDir.rootPath()))
@@ -320,7 +319,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
     def change_name(self):
         index = self.treeView.selectedIndexes()
         if len(index) > 4 or len(index) <= 0:
-            self.show_msg("Error", "Choose one item")
+            self.show_msg("Error", "Choose one item").show()
             return
         self.treeView.edit(index[0])
 
@@ -330,7 +329,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         i, filled = QInputDialog.getText(self, "Input name", "Input", text="New folder")
         if filled:
             if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
-                self.show_msg("Error", "Invalid name!")
+                self.show_msg("Error", "Invalid name!").show()
             else:
                 Path(path + '/' + i).mkdir(exist_ok=True)
 
@@ -340,9 +339,9 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         i, filled = QInputDialog.getText(self, "Input name", "Input", text="New file")
         if filled:
             if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
-                self.show_msg("Error", "Invalid name!")
+                self.show_msg("Error", "Invalid name!").show()
             elif path == "C:/":
-                self.show_msg("Error", "Can't create file here!")
+                self.show_msg("Error", "Can't create file here!").show()
             else:
                 Path(path + '/' + i).touch(exist_ok=True)
 
@@ -373,7 +372,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             for i in self.copy_this:
                 file_to_copy = Path(i)
                 if not file_to_copy.exists():
-                    self.show_msg("Error", "File not exists!")
+                    self.show_msg("Error", "File not exists!").show()
                     continue
                 path = self.model.filePath(index)
                 if os.path.isdir(i):
@@ -388,7 +387,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                             + file_to_copy.suffix
                     shutil.copy2(i, path)
         except PermissionError:
-            self.show_msg("Warning", "Run as admin to do that")
+            self.show_msg("Warning", "Run as admin to do that").show()
 
     def show_msg(self, title, text):
         msg = QMessageBox(self)
@@ -396,9 +395,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             msg.setIcon(QMessageBox.Warning)
         elif title == "Error":
             msg.setIcon(QMessageBox.Critical)
+        elif title == "Info":
+            msg.setIcon(QMessageBox.Information)
         msg.setWindowTitle(title)
         msg.setText(text)
-        msg.show()
+        return msg
 
     def show_atts(self):
         index = self.treeView.selectedIndexes()
@@ -406,10 +407,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.size_worker = SizeWorker(self.file)
         self.size_worker.finished.connect(self.report)
         self.size_worker.start()
-        self.atts_win = QMessageBox(self)
-        self.atts_win.setIcon(QMessageBox.Information)
-        self.atts_win.setWindowTitle("Please wait")
-        self.atts_win.setText("Calculating size...")
+        self.atts_win = self.show_msg("Info", "Calculating size...")
         self.atts_win.show()
 
     def report(self, n):
@@ -435,9 +433,9 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         i, filled = QInputDialog.getText(self, "Input name", "Input", text=file.stem)
         if filled:
             if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
-                self.show_msg("Error", "Invalid name")
+                self.show_msg("Error", "Invalid name").show()
             elif os.path.exists(str(file.parent) + '/' + i + '.zip'):
-                self.show_msg("Error", "Already exists!")
+                self.show_msg("Error", "Already exists!").show()
             else:
                 shutil.make_archive(i, 'zip', file.parent, file.name)
         if len(index) > 4:
@@ -450,9 +448,9 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         i, filled = QInputDialog.getText(self, "Input name", "Input", text=file.stem)
         if filled:
             if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
-                self.show_msg("Error", "Invalid name")
+                self.show_msg("Error", "Invalid name").show()
             elif os.path.exists(str(file.parent) + '/' + i):
-                self.show_msg("Error", "Already exists!")
+                self.show_msg("Error", "Already exists!").show()
             else:
                 shutil.unpack_archive(file, i)
 
