@@ -8,7 +8,8 @@ import time
 from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QTreeView, QWidget, QVBoxLayout, \
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox,\
+    QInputDialog, QTreeView, QWidget, QVBoxLayout, \
     QLabel, QLineEdit, QHBoxLayout, QListWidget
 from PyQt5.QtCore import QDir, Qt
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -74,8 +75,10 @@ class AttributeWindow(QWidget):
         first_row.addWidget(filesize_value)
         self.layout.addLayout(first_row)
 
-        modification_date_string = datetime.datetime.fromtimestamp(self.modification_date).strftime('%Y-%m-%d %H:%M:%S')
-        access_date_string = datetime.datetime.fromtimestamp(self.access_date).strftime('%Y-%m-%d %H:%M:%S')
+        modification_date_string = datetime.datetime.\
+            fromtimestamp(self.modification_date).strftime('%Y-%m-%d %H:%M:%S')
+        access_date_string = datetime.datetime.\
+            fromtimestamp(self.access_date).strftime('%Y-%m-%d %H:%M:%S')
 
         modification_date_label = QLabel("Last Modified:")
         modification_date_value = QLineEdit(modification_date_string)
@@ -172,7 +175,8 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.treeView.doubleClicked.connect(self.open_file)
         self.treeView.viewport().installEventFilter(self)
         self.treeView.setModel(self.model)
-        self.treeView.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.treeView.\
+            setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.treeView.setDragDropMode(QTreeView.InternalMove)
         self.treeView.setSelectionMode(QTreeView.ExtendedSelection)
         self.treeView.sortByColumn(0, QtCore.Qt.SortOrder(0))
@@ -294,9 +298,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def search_goto(self, path):
         self.treeView.setRootIndex(self.model.index(path))
+        self.lineEdit.setText(path)
+        self.set_path(path)
 
     def path_changer(self):
-        path_l = [self.comboBox.itemText(i) for i in range(self.comboBox.currentIndex() + 1)]
+        path_l = [self.comboBox.itemText(i)
+                  for i in range(self.comboBox.currentIndex() + 1)]
         path = '/'.join(path_l)
         self.lineEdit.setText(path)
         self.treeView.setRootIndex(self.model.index(path))
@@ -326,9 +333,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
     def new_dir(self):
         index = self.treeView.rootIndex()
         path = self.model.filePath(index)
-        i, filled = QInputDialog.getText(self, "Input name", "Input", text="New folder")
+        i, filled = QInputDialog.\
+            getText(self, "Input name", "Input", text="New folder")
         if filled:
-            if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
+            if i == "" or i == "." or\
+                    i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name!").show()
             else:
                 Path(path + '/' + i).mkdir(exist_ok=True)
@@ -336,9 +345,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
     def new_file(self):
         index = self.treeView.rootIndex()
         path = self.model.filePath(index)
-        i, filled = QInputDialog.getText(self, "Input name", "Input", text="New file")
+        i, filled = QInputDialog.\
+            getText(self, "Input name", "Input", text="New file")
         if filled:
-            if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
+            if i == "" or i == "." or\
+                    i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name!").show()
             elif path == "C:/":
                 self.show_msg("Error", "Can't create file here!").show()
@@ -353,10 +364,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def show_hid(self):
         if not self.hidden:
-            self.model.setFilter(QDir.NoDot | QDir.NoDotDot | QDir.Hidden | QDir.AllDirs | QDir.Files)
+            self.model.setFilter(QDir.NoDot | QDir.NoDotDot |
+                                 QDir.Hidden | QDir.AllDirs | QDir.Files)
             self.hidden = True
         else:
-            self.model.setFilter(QDir.NoDot | QDir.NoDotDot | QDir.AllDirs | QDir.Files)
+            self.model.setFilter(QDir.NoDot | QDir.NoDotDot |
+                                 QDir.AllDirs | QDir.Files)
             self.hidden = False
 
     def copy(self):
@@ -430,9 +443,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                 else:
                     shutil.copy2(i, file)
         os.chdir(os.path.dirname(str(file.parent) + '/'))
-        i, filled = QInputDialog.getText(self, "Input name", "Input", text=file.stem)
+        i, filled = QInputDialog.\
+            getText(self, "Input name", "Input", text=file.stem)
         if filled:
-            if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
+            if i == "" or i == "." or\
+                    i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name").show()
             elif os.path.exists(str(file.parent) + '/' + i + '.zip'):
                 self.show_msg("Error", "Already exists!").show()
@@ -445,9 +460,11 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         index = self.treeView.selectedIndexes()
         file = Path(self.model.filePath(index[0]))
         os.chdir(os.path.dirname(str(file.parent) + '/'))
-        i, filled = QInputDialog.getText(self, "Input name", "Input", text=file.stem)
+        i, filled = QInputDialog.\
+            getText(self, "Input name", "Input", text=file.stem)
         if filled:
-            if i == "" or i == "." or i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
+            if i == "" or i == "." or i == ".." or \
+                    re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name").show()
             elif os.path.exists(str(file.parent) + '/' + i):
                 self.show_msg("Error", "Already exists!").show()
@@ -456,8 +473,8 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def eventFilter(self, obj, event):
         if (
-                obj is self.treeView.viewport()
-                and event.type() == QtCore.QEvent.MouseButtonPress
+                obj is self.treeView.viewport() and
+                event.type() == QtCore.QEvent.MouseButtonPress
         ):
             ix = self.treeView.indexAt(event.pos())
             if not ix.isValid():
