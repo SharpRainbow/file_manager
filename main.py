@@ -1,18 +1,153 @@
+import sys
 import os
 import shutil
-import sys
 import re
+
+import datetime
 import time
 from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QTreeView
-from PyQt5.QtCore import QDir
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QTreeView, QWidget, QVBoxLayout, \
+    QLabel, QLineEdit, QHBoxLayout, QListWidget
+from PyQt5.QtCore import QDir, Qt
+from PyQt5.QtCore import QThread, pyqtSignal
 
 from ui import main
 
 
+class SearchResults(QWidget):
+    clicked = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+
+        self.list_view = QListWidget()
+
+        self.list_view.itemClicked.connect(self.selected)
+        self.setMinimumWidth(1000)
+        vbox = QVBoxLayout()
+        vbox.addWidget(self.list_view)
+        self.setLayout(vbox)
+
+    def add(self, item):
+        self.list_view.addItem(item)
+
+    def selected(self, item):
+        self.clicked.emit(item.text())
+
+    def finished(self):
+        info = QMessageBox(self)
+        info.setIcon(QMessageBox.Information)
+        info.setWindowTitle("Error")
+        info.setText("Search ended")
+        info.show()
+
+
+class AttributeWindow(QWidget):
+    def __init__(self, file, filesize):
+        super().__init__()
+        self.filename = file.name
+        self.filepath = file
+        self.filesize = filesize
+        self.init_vars()
+        self.init_ui()
+
+    def init_vars(self):
+        stats = os.stat(self.filepath)
+        self.modification_date = stats.st_mtime
+        self.access_date = stats.st_atime
+
+    def init_ui(self):
+        self.layout = QVBoxLayout(self)
+        self.setWindowTitle(self.filename)
+        filesize_label = QLabel("Size:")
+        filesize_real = format(self.filesize / 1024, '.2f') + " KB"
+        if self.filesize > 1048576:
+            filesize_real = format(self.filesize / 1048576, '.2f') + " MB"
+        if self.filesize < 1024:
+            filesize_real = str(self.filesize) + " B"
+        filesize_value = QLineEdit(filesize_real)
+        filesize_value.setEnabled(False)
+        first_row = QHBoxLayout()
+        first_row.addWidget(filesize_label)
+        first_row.addWidget(filesize_value)
+        self.layout.addLayout(first_row)
+
+        modification_date_string = datetime.datetime.fromtimestamp(self.modification_date).strftime('%Y-%m-%d %H:%M:%S')
+        access_date_string = datetime.datetime.fromtimestamp(self.access_date).strftime('%Y-%m-%d %H:%M:%S')
+
+        modification_date_label = QLabel("Last Modified:")
+        modification_date_value = QLineEdit(modification_date_string)
+        modification_date_value.setEnabled(False)
+        second_row = QHBoxLayout()
+        second_row.addWidget(modification_date_label)
+        second_row.addWidget(modification_date_value)
+        self.layout.addLayout(second_row)
+
+        access_date_label = QLabel("Last Accessed:")
+        access_date_value = QLineEdit(access_date_string)
+        access_date_value.setEnabled(False)
+        third_row = QHBoxLayout()
+        third_row.addWidget(access_date_label)
+        third_row.addWidget(access_date_value)
+        self.layout.addLayout(third_row)
+
+
+class SizeWorker(QThread):
+    finished = pyqtSignal(float)
+
+    def __init__(self, file):
+        super(SizeWorker, self).__init__()
+        self.file = file
+
+    def run(self) -> None:
+        size = 0
+        if self.file.is_file():
+            size = self.file.stat().st_size
+        elif self.file.is_dir():
+            size = round(get_size(self.file), 3)
+        self.finished.emit(size)
+
+
+class Searcher(QThread):
+    found = pyqtSignal(str)
+    finished = pyqtSignal()
+
+    def __init__(self, name, root):
+        super(Searcher, self).__init__()
+        self.name = name
+        self.root = root
+
+    def run(self) -> None:
+        for path, dirs, files in os.walk(self.root):
+            for d in dirs:
+                if self.name == d:
+                    self.found.emit(path)
+                    print(path)
+            for f in files:
+                if str(f).startswith(self.name):
+                    self.found.emit(path)
+                    print(path)
+        self.finished.emit()
+
+
+def get_size(filepath):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(filepath):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if not os.path.islink(fp):
+                try:
+                    total_size += os.path.getsize(fp)
+                except FileNotFoundError:
+                    continue
+    return total_size
+
+
 class MyWidget(QMainWindow, main.Ui_MainWindow):
+    keyPressed = QtCore.pyqtSignal(QtCore.QEvent)
+
     def __init__(self):
         super().__init__()
         self.setupUi(self)
@@ -22,6 +157,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.actionBack.triggered.connect(self.go_back)
         self.actionHome.triggered.connect(self.home_dir)
         self.actionShowHidden.triggered.connect(self.show_hid)
+        self.actionSearch.triggered.connect(self.file_search)
+        self.lineEdit.returnPressed.connect(self.goto)
+        self.keyPressed.connect(self.on_key)
+        self.treeView.setAcceptDrops(True)
+        self.treeView.setDropIndicatorShown(True)
+        self.info()
 
         self.model = QtWidgets.QFileSystemModel()
         self.model.setRootPath((QtCore.QDir.rootPath()))
@@ -42,6 +183,50 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.lineEdit.returnPressed.connect(self.goto)
         self.comboBox.activated.connect(self.path_changer)
 
+    def finish(self):
+        self.win.finished()
+
+    def show_res(self, file):
+        self.win.add(file)
+
+    def click(self, file):
+        self.treeView.setRootIndex(self.model.index(file))
+        self.win.close()
+
+    def file_search(self):
+        index = self.treeView.rootIndex()
+        filepath = self.model.filePath(index)
+        s, search = QInputDialog.getText(self, "Search", "Input", text="")
+        if search:
+            self.search_worker = Searcher(s, filepath)
+            self.search_worker.found.connect(self.show_res)
+            self.search_worker.finished.connect(self.finish)
+            self.search_worker.start()
+            self.win = SearchResults()
+            self.win.show()
+            self.win.clicked.connect(self.click)
+
+    def keyPressEvent(self, event):
+        super(MyWidget, self).keyPressEvent(event)
+        self.keyPressed.emit(event)
+
+    def on_key(self, event):
+        if event.modifiers() & Qt.ControlModifier:
+            if event.key() == Qt.Key_H:
+                self.home_dir()
+            if event.key() == Qt.Key_C:
+                self.copy()
+            if event.key() == Qt.Key_V:
+                self.paste()
+            if event.key() == Qt.Key_R:
+                self.change_name()
+            if event.key() == Qt.Key_S:
+                self.file_search()
+            if event.key() == Qt.Key_Left:
+                self.go_back()
+        if event.key() == Qt.Key_Delete:
+            self.delete_selected()
+
     def cont_menu(self):
         menu = QtWidgets.QMenu()
         index = self.treeView.selectedIndexes()
@@ -53,15 +238,19 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             new_file.triggered.connect(self.new_file)
             paste.triggered.connect(self.paste)
         else:
+            file = Path(self.model.filePath(index[0]))
             _open = menu.addAction("Open")
             change = menu.addAction("Change name")
             delete = menu.addAction("Delete")
             copy = menu.addAction("Copy")
+            attributes = menu.addAction("Attributes")
             arc = menu.addAction("Archive")
-            unpack = menu.addAction("Unpack")
-            unpack.triggered.connect(self.unpack)
+            if file.suffix == '.zip':
+                unpack = menu.addAction("Unpack")
+                unpack.triggered.connect(self.unpack)
             arc.triggered.connect(self.archive)
             copy.triggered.connect(self.copy)
+            attributes.triggered.connect(self.show_atts)
             delete.triggered.connect(self.delete_selected)
             _open.triggered.connect(self.open_file)
             change.triggered.connect(self.change_name)
@@ -103,6 +292,9 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             self.set_path(path)
         else:
             self.show_msg("Error", "Wrong path!")
+
+    def search_goto(self, path):
+        self.treeView.setRootIndex(self.model.index(path))
 
     def path_changer(self):
         path_l = [self.comboBox.itemText(i) for i in range(self.comboBox.currentIndex() + 1)]
@@ -207,6 +399,23 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         msg.setWindowTitle(title)
         msg.setText(text)
         msg.show()
+
+    def show_atts(self):
+        index = self.treeView.selectedIndexes()
+        self.file = Path(self.model.filePath(index[0]))
+        self.size_worker = SizeWorker(self.file)
+        self.size_worker.finished.connect(self.report)
+        self.size_worker.start()
+        self.atts_win = QMessageBox(self)
+        self.atts_win.setIcon(QMessageBox.Information)
+        self.atts_win.setWindowTitle("Please wait")
+        self.atts_win.setText("Calculating size...")
+        self.atts_win.show()
+
+    def report(self, n):
+        self.atts_win.close()
+        self.atts_win = AttributeWindow(self.file, n)
+        self.atts_win.show()
 
     def archive(self):
         index = self.treeView.selectedIndexes()
