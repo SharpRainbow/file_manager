@@ -76,5 +76,5 @@ class Ui_MainWindow(object):
         self.menuHome.setTitle(_translate("MainWindow", "Menu"))
         self.actionHome.setText(_translate("MainWindow", "Home"))
         self.actionBack.setText(_translate("MainWindow", "Back"))
-        self.actionSearch.setText(_translate("MainWindow", "Search"))
         self.actionShowHidden.setText(_translate("MainWindow", "Show hidden files"))
+        self.actionSearch.setText(_translate("MainWindow", "Search"))
