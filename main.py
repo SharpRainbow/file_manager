@@ -63,7 +63,7 @@ class AttributeWindow(QWidget):
         self.init_ui()
 
     def init_vars(self):
-        stats = os.stat(self.filepath)
+        stats = self.filepath.stat()
         self.modification_date = stats.st_mtime
         self.access_date = stats.st_atime
 
@@ -145,10 +145,10 @@ def get_size(filepath):
     total_size = 0
     for dirpath, dirnames, filenames in os.walk(filepath):
         for f in filenames:
-            fp = os.path.join(dirpath, f)
-            if not os.path.islink(fp):
+            fp = Path(dirpath) / Path(f)
+            if not fp.is_symlink():
                 try:
-                    total_size += os.path.getsize(fp)
+                    total_size += fp.stat().st_size
                 except FileNotFoundError:
                     continue
     return total_size
@@ -195,7 +195,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def click(self, file):
         self.treeView.setRootIndex(self.model.index(file))
-        self.win.close()
+        self.search_results.close()
 
     def file_search(self):
         index = self.treeView.rootIndex()
@@ -275,10 +275,10 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         index = self.treeView.currentIndex()
         file_path = self.model.filePath(index)
         self.treeView.clearSelection()
-        if os.path.isfile(file_path):
+        if Path(file_path).is_file():
             os.startfile(file_path)
-        if os.path.isdir(file_path):
-            self.treeView.setRootIndex(self.model.index(file_path))
+        if Path(file_path).is_dir():
+            self.treeView.setRootIndex(index)
             self.lineEdit.setText(file_path)
             self.set_path(file_path)
 
@@ -290,7 +290,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def goto(self):
         path = self.lineEdit.text()
-        if os.path.exists(path):
+        if Path(path).exists():
             self.treeView.setRootIndex(self.model.index(path))
             self.set_path(path)
         else:
@@ -309,10 +309,9 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.treeView.setRootIndex(self.model.index(path))
 
     def go_back(self):
-        index = self.treeView.rootIndex()
-        path = self.model.filePath(self.model.parent(index))
-        self.treeView.setRootIndex(self.model.index(path))
-        self.lineEdit.setText(path.replace('\\', '/'))
+        index = self.model.parent(self.treeView.rootIndex())
+        self.treeView.setRootIndex(index)
+        self.lineEdit.setText(self.model.filePath(index))
         if self.comboBox.currentIndex() != 0:
             self.comboBox.setCurrentIndex(self.comboBox.currentIndex() - 1)
 
@@ -332,7 +331,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def new_dir(self):
         index = self.treeView.rootIndex()
-        path = self.model.filePath(index)
+        path = Path(self.model.filePath(index))
         i, filled = QInputDialog. \
             getText(self, "Input name", "Input", text="New folder")
         if filled:
@@ -340,21 +339,21 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                     i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name!").show()
             else:
-                Path(path + '/' + i).mkdir(exist_ok=True)
+                (path / Path(i)).mkdir(exist_ok=True)
 
     def new_file(self):
         index = self.treeView.rootIndex()
-        path = self.model.filePath(index)
+        path = Path(self.model.filePath(index))
         i, filled = QInputDialog. \
             getText(self, "Input name", "Input", text="New file")
         if filled:
             if i == "" or i == "." or \
                     i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name!").show()
-            elif path == "C:/":
+            elif str(path) == "C:\\":
                 self.show_msg("Error", "Can't create file here!").show()
             else:
-                Path(path + '/' + i).touch(exist_ok=True)
+                (path / Path(i)).touch(exist_ok=True)
 
     def delete_selected(self):
         index = self.treeView.selectedIndexes()
@@ -387,13 +386,13 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                     self.show_msg("Error", "File not exists!").show()
                     continue
                 path = self.model.filePath(index)
-                if os.path.isdir(i):
+                if Path(i).is_dir():
                     path = path + f"/{file_to_copy.name}"
-                    if os.path.exists(path):
+                    if Path(path).exists():
                         path += " - copy at " + str(round(time.time() * 1000))
                     shutil.copytree(i, path)
                 else:
-                    if os.path.exists(path + '/' + file_to_copy.name):
+                    if Path(path + '/' + file_to_copy.name).exists():
                         path = path \
                                + '/' + file_to_copy.stem + " - copy" \
                                + file_to_copy.suffix
@@ -435,22 +434,22 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         if len(index) > 4:
             self.model.mkdir(self.treeView.rootIndex(), "zip")
             files_set = set()
-            file = Path(str(file.parent) + "/zip")
+            file = file.parent / Path("zip")
             for i in index:
                 files_set.add(self.model.filePath(i))
             for i in files_set:
-                if os.path.isdir(i):
-                    shutil.copytree(i, str(file) + "/" + Path(i).name)
+                if Path(i).is_dir():
+                    shutil.copytree(i, file / Path(i).name)
                 else:
                     shutil.copy2(i, file)
-        os.chdir(os.path.dirname(str(file.parent) + '/'))
+        os.chdir(file.parent)
         i, filled = QInputDialog. \
             getText(self, "Input name", "Input", text=file.stem)
         if filled:
             if i == "" or i == "." or \
                     i == ".." or re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name").show()
-            elif os.path.exists(str(file.parent) + '/' + i + ".zip"):
+            elif (file.parent / Path(i + ".zip")).exists():
                 self.show_msg("Error", "Already exists!").show()
             else:
                 shutil.make_archive(i, "zip", file.parent, file.name)
@@ -460,14 +459,14 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
     def unpack(self):
         index = self.treeView.selectedIndexes()
         file = Path(self.model.filePath(index[0]))
-        os.chdir(os.path.dirname(str(file.parent) + '/'))
+        os.chdir(file.parent)
         i, filled = QInputDialog. \
             getText(self, "Input name", "Input", text=file.stem)
         if filled:
             if i == "" or i == "." or i == ".." or \
                     re.match(r'.*[<>:"/\\|?*].*', str(i)):
                 self.show_msg("Error", "Invalid name").show()
-            elif os.path.exists(str(file.parent) + '/' + i):
+            elif (file.parent / Path(i)).exists():
                 self.show_msg("Error", "Already exists!").show()
             else:
                 shutil.unpack_archive(file, i)
