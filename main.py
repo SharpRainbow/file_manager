@@ -9,10 +9,9 @@ from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, \
-    QInputDialog, QTreeView, QWidget, QVBoxLayout, \
-    QLabel, QLineEdit, QHBoxLayout, QListWidget
-from PyQt5.QtCore import QDir, Qt
-from PyQt5.QtCore import QThread, pyqtSignal
+                            QInputDialog, QTreeView, QWidget, QVBoxLayout, \
+                            QLabel, QLineEdit, QHBoxLayout, QListWidget
+from PyQt5.QtCore import QDir, Qt, QThread, pyqtSignal
 
 from ui import main
 
@@ -155,7 +154,6 @@ def get_size(filepath):
 
 
 class MyWidget(QMainWindow, main.Ui_MainWindow):
-    keyPressed = QtCore.pyqtSignal(QtCore.QEvent)
 
     def __init__(self):
         super().__init__()
@@ -169,7 +167,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.actionShowHidden.triggered.connect(self.show_hid)
         self.actionSearch.triggered.connect(self.file_search)
         self.lineEdit.returnPressed.connect(self.goto)
-        self.keyPressed.connect(self.on_key)
         self.treeView.setAcceptDrops(True)
         self.treeView.setDropIndicatorShown(True)
 
@@ -210,10 +207,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             self.search_results.clicked.connect(self.click)
 
     def keyPressEvent(self, event):
-        super(MyWidget, self).keyPressEvent(event)
-        self.keyPressed.emit(event)
-
-    def on_key(self, event):
         if event.modifiers() & Qt.ControlModifier:
             if event.key() == Qt.Key_H:
                 self.home_dir()
