@@ -5,6 +5,8 @@ import re
 import datetime
 import time
 
+from send2trash import send2trash
+
 from pathlib import Path
 
 from PyQt5 import QtCore, QtWidgets, QtGui
@@ -36,7 +38,7 @@ class SearchResults(QWidget):
         self.search_worker.start()
 
     def add(self, item):
-        self.list_view.addItem(item)
+        self.list_view.addItem(item.replace('\\', '/'))
 
     def selected(self, item):
         self.clicked.emit(item.text())
@@ -157,6 +159,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
 
     def __init__(self):
         super().__init__()
+        self.cut_flag = False
         self.size_worker = None
         self.setupUi(self)
         self.hidden = False
@@ -187,11 +190,12 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.treeView.setColumnWidth(0, 200)
         self.treeView.setSortingEnabled(True)
 
-        self.lineEdit.returnPressed.connect(self.goto)
         self.comboBox.activated.connect(self.path_changer)
 
     def click(self, file):
         self.treeView.setRootIndex(self.model.index(file))
+        self.lineEdit.setText(file)
+        self.set_path(file)
         self.search_results.close()
 
     def file_search(self):
@@ -206,23 +210,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             self.search_results.show()
             self.search_results.clicked.connect(self.click)
 
-    def keyPressEvent(self, event):
-        if event.modifiers() & Qt.ControlModifier:
-            if event.key() == Qt.Key_H:
-                self.home_dir()
-            if event.key() == Qt.Key_C:
-                self.copy()
-            if event.key() == Qt.Key_V:
-                self.paste()
-            if event.key() == Qt.Key_R:
-                self.change_name()
-            if event.key() == Qt.Key_S:
-                self.file_search()
-            if event.key() == Qt.Key_Left:
-                self.go_back()
-        if event.key() == Qt.Key_Delete:
-            self.delete_selected()
-
     def cont_menu(self):
         menu = QtWidgets.QMenu()
         index = self.treeView.selectedIndexes()
@@ -233,17 +220,28 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             new_dir.triggered.connect(self.new_dir)
             new_file.triggered.connect(self.new_file)
             paste.triggered.connect(self.paste)
+        elif Path(self.model.filePath(index[0])).name == "":
+            change = menu.addAction("Change name")
+            _open = menu.addAction("Open")
+            attributes = menu.addAction("Attributes")
+            change.triggered.connect(self.change_name)
+            _open.triggered.connect(self.open_file)
+            attributes.triggered.connect(self.show_atts)
         else:
             file = Path(self.model.filePath(index[0]))
             _open = menu.addAction("Open")
             change = menu.addAction("Change name")
             delete = menu.addAction("Delete")
+            recycle = menu.addAction("Add to bin")
             copy = menu.addAction("Copy")
+            cut = menu.addAction("Cut")
             attributes = menu.addAction("Attributes")
             arc = menu.addAction("Archive")
             if file.suffix == ".zip":
                 unpack = menu.addAction("Unpack")
                 unpack.triggered.connect(self.unpack)
+            recycle.triggered.connect(self.add_to_bin)
+            cut.triggered.connect(self.cut)
             arc.triggered.connect(self.archive)
             copy.triggered.connect(self.copy)
             attributes.triggered.connect(self.show_atts)
@@ -253,29 +251,19 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         cursor = QtGui.QCursor()
         menu.exec_(cursor.pos())
 
-    def dragEnterEvent(self, event):
-        mime = event.mimeData()
-        if mime.hasUrls():
-            event.acceptProposedAction()
-
-    def dropEvent(self, event):
-        for url in event.mimeData().urls():
-            self.copy_this.add(url.toLocalFile())
-            self.paste()
-        return super().dropEvent(event)
-
     def open_file(self):
-        index = self.treeView.currentIndex()
-        file_path = self.model.filePath(index)
+        index = self.treeView.selectedIndexes()
+        file_path = self.model.filePath(index[0])
         self.treeView.clearSelection()
         if Path(file_path).is_file():
             os.startfile(file_path)
         if Path(file_path).is_dir():
-            self.treeView.setRootIndex(index)
+            self.treeView.setRootIndex(index[0])
             self.lineEdit.setText(file_path)
             self.set_path(file_path)
 
     def set_path(self, path):
+        self.treeView.clearSelection()
         path_list = [x for x in path.split("/") if x != ""]
         self.comboBox.clear()
         self.comboBox.addItems(path_list)
@@ -287,14 +275,10 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             self.treeView.setRootIndex(self.model.index(path))
             self.set_path(path)
         else:
-            self.show_msg("Error", "Wrong path!")
-
-    def search_goto(self, path):
-        self.treeView.setRootIndex(self.model.index(path))
-        self.lineEdit.setText(path)
-        self.set_path(path)
+            self.show_msg("Error", "Wrong path!").show()
 
     def path_changer(self):
+        self.treeView.clearSelection()
         path_l = [self.comboBox.itemText(i)
                   for i in range(self.comboBox.currentIndex() + 1)]
         path = '/'.join(path_l)
@@ -302,6 +286,7 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         self.treeView.setRootIndex(self.model.index(path))
 
     def go_back(self):
+        self.treeView.clearSelection()
         index = self.model.parent(self.treeView.rootIndex())
         self.treeView.setRootIndex(index)
         self.lineEdit.setText(self.model.filePath(index))
@@ -352,7 +337,6 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         index = self.treeView.selectedIndexes()
         for i in index:
             self.model.remove(i)
-        self.treeView.clearSelection()
 
     def show_hid(self):
         if not self.hidden:
@@ -370,6 +354,16 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
         for i in indexes:
             self.copy_this.add(self.model.filePath(i))
 
+    def cut(self):
+        self.copy()
+        self.cut_flag = True
+
+    def add_to_bin(self):
+        index = self.treeView.selectedIndexes()
+        files_to_delete = set(self.model.filePath(x) for x in index)
+        for i in files_to_delete:
+            send2trash(Path(i))
+
     def paste(self):
         index = self.treeView.rootIndex()
         try:
@@ -379,17 +373,23 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
                     self.show_msg("Error", "File not exists!").show()
                     continue
                 path = self.model.filePath(index)
-                if Path(i).is_dir():
+                if file_to_copy.is_dir():
                     path = path + f"/{file_to_copy.name}"
                     if Path(path).exists():
                         path += " - copy at " + str(round(time.time() * 1000))
-                    shutil.copytree(i, path)
+                    shutil.copytree(file_to_copy, path)
                 else:
                     if Path(path + '/' + file_to_copy.name).exists():
                         path = path \
                                + '/' + file_to_copy.stem + " - copy" \
                                + file_to_copy.suffix
-                    shutil.copy2(i, path)
+                    shutil.copy2(file_to_copy, path)
+                if self.cut_flag:
+                    if file_to_copy.is_dir():
+                        shutil.rmtree(file_to_copy)
+                    else:
+                        file_to_copy.unlink()
+            self.cut_flag = False
         except PermissionError:
             self.show_msg("Warning", "Run as admin to do that").show()
 
@@ -473,6 +473,34 @@ class MyWidget(QMainWindow, main.Ui_MainWindow):
             if not ix.isValid():
                 self.treeView.clearSelection()
         return super(MyWidget, self).eventFilter(obj, event)
+
+    def keyPressEvent(self, event):
+        if event.modifiers() & Qt.ControlModifier:
+            if event.key() == Qt.Key_H:
+                self.home_dir()
+            if event.key() == Qt.Key_C:
+                self.copy()
+            if event.key() == Qt.Key_V:
+                self.paste()
+            if event.key() == Qt.Key_R:
+                self.change_name()
+            if event.key() == Qt.Key_S:
+                self.file_search()
+            if event.key() == Qt.Key_Left:
+                self.go_back()
+        if event.key() == Qt.Key_Delete:
+            self.delete_selected()
+
+    def dragEnterEvent(self, event):
+        mime = event.mimeData()
+        if mime.hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            self.copy_this.add(url.toLocalFile())
+            self.paste()
+        return super().dropEvent(event)
 
 
 if __name__ == "__main__":
